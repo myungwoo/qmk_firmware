@@ -11,6 +11,16 @@ static bool a_phys_suppressed_dn = false; // 물리 A down 이벤트를 우리�
 static bool a_phys_down          = false; // 물리 A가 현재 눌린 상태인지
 static bool a_keep_latch_on_up   = false; // 물리 A를 누른 상태에서 토글 ON 되었을 때, 해당 물리 up을 무시(홀드 유지)
 
+static void a_tog_reset_state(void) {
+    if (a_latched) {
+        unregister_code(KC_A);
+    }
+    a_latched            = false;
+    a_phys_suppressed_dn = false;
+    a_phys_down          = false;
+    a_keep_latch_on_up   = false;
+}
+
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case A_TOG:
@@ -39,6 +49,9 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                         unregister_code(KC_A);
                         a_latched = false;
                     } else if (a_phys_down) {
+                        // 물리 A가 이미(호스트에) 눌린 상태에서 토글을 끄는 경우:
+                        // 토글로 걸어둔 register를 풀되, 물리 A는 계속 눌린 상태이므로 결과적으로 A는 계속 DOWN이어야 한다.
+                        unregister_code(KC_A);
                         a_latched          = false;
                         a_keep_latch_on_up = false; // 물리 A up을 통과시켜 정상 해제되도록
                     } else {
@@ -77,6 +90,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return true;
     }
+    return true;
+}
+
+// 가드: 슬립/부트로더/USB 상태 변화로 clear_keyboard()가 발생해도
+// 내부 상태(a_latched 등)가 남아있으면 이후 동작이 꼬일 수 있으므로 리셋한다.
+bool shutdown_user(bool jump_to_bootloader) {
+    a_tog_reset_state();
     return true;
 }
 
