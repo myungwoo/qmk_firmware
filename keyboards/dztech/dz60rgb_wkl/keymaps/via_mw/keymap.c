@@ -24,8 +24,19 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                         a_keep_latch_on_up = true;
                     }
                 } else {
-                    unregister_code(KC_A);
-                    a_latched = false;
+                    // 토글 OFF:
+                    // - 물리 A down이 "억제된" 상태라면(=a_phys_suppressed_dn), 토글이 유일한 A 홀드이므로 반드시 해제
+                    // - 물리 A가 실제로(호스트에) 눌린 상태라면, 토글을 끄더라도 물리 A가 유지되도록 키업을 기다림
+                    if (a_phys_suppressed_dn) {
+                        unregister_code(KC_A);
+                        a_latched = false;
+                    } else if (a_phys_down) {
+                        a_latched          = false;
+                        a_keep_latch_on_up = false; // 물리 A up을 통과시켜 정상 해제되도록
+                    } else {
+                        unregister_code(KC_A);
+                        a_latched = false;
+                    }
                 }
             }
             return false;
