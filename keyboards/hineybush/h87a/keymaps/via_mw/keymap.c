@@ -8,6 +8,8 @@ enum custom_keycodes {
 
 static bool a_latched            = false; // 가상으로 A가 눌린 상태인지
 static bool a_phys_suppressed_dn = false; // 물리 A down 이벤트를 우리가 막았는지(대응 release도 막기 위함)
+static bool a_phys_down          = false; // 물리 A가 현재 눌린 상태인지
+static bool a_keep_latch_on_up   = false; // 물리 A를 누른 상태에서 토글 ON 되었을 때, 해당 물리 up을 무시(홀드 유지)
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
@@ -16,6 +18,11 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 if (!a_latched) {
                     register_code(KC_A);
                     a_latched = true;
+                    // 물리 A를 이미 누르고 있는 상태에서 토글로 A를 켠 경우,
+                    // 이후 물리 A를 떼더라도 토글 홀드가 유지되도록 up 이벤트를 한 번 막는다.
+                    if (a_phys_down) {
+                        a_keep_latch_on_up = true;
+                    }
                 } else {
                     unregister_code(KC_A);
                     a_latched = false;
@@ -26,12 +33,19 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         // 물리 A키의 동작을 가로채서, "토글로 A가 눌린 상태일 때"의 예외 규칙을 구현
         case KC_A:
             if (record->event.pressed) {
+                a_phys_down = true;
                 if (a_latched) {
                     // 이미 A가 가상으로 눌려있다면, 물리 A down은 변화 없이 무시
                     a_phys_suppressed_dn = true;
                     return false;
                 }
             } else {
+                a_phys_down = false;
+                if (a_keep_latch_on_up) {
+                    // (물리 A를 누른 상태에서 토글 ON 된 케이스) 물리 A up을 무시해서 홀드 유지
+                    a_keep_latch_on_up = false;
+                    return false;
+                }
                 if (a_phys_suppressed_dn) {
                     // (가상 홀드 중) 물리 A를 눌렀다 뗀 순간 = A를 뗀 것과 같게 + 토글 상태 해제
                     a_phys_suppressed_dn = false;
