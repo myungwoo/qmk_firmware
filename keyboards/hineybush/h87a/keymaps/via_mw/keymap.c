@@ -27,7 +27,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                     // 토글 OFF:
                     // - 물리 A down이 "억제된" 상태라면(=a_phys_suppressed_dn), 토글이 유일한 A 홀드이므로 반드시 해제
                     // - 물리 A가 실제로(호스트에) 눌린 상태라면, 토글을 끄더라도 물리 A가 유지되도록 키업을 기다림
-                    if (a_phys_suppressed_dn) {
+                    if (a_phys_suppressed_dn && a_phys_down) {
+                        // 토글 홀드를 끄는 순간에도 물리 A는 계속 누르고 있는 상태일 수 있음.
+                        // 이 경우, 토글 홀드는 해제하되 "현재 물리 A down" 상태가 호스트에 반영되도록 press를 재생성한다.
+                        unregister_code(KC_A);
+                        a_latched = false;
+
+                        a_phys_suppressed_dn = false; // 이후 물리 A up은 정상적으로 통과
+                        register_code(KC_A);          // 물리 A가 내려가 있는 상태를 호스트에 반영
+                    } else if (a_phys_suppressed_dn) {
                         unregister_code(KC_A);
                         a_latched = false;
                     } else if (a_phys_down) {
