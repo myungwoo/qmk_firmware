@@ -52,6 +52,18 @@ bool via_mw_process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case VIA_MW_A_TOG:
             if (record->event.pressed) {
+                // UX 규칙:
+                // 물리 A를 누르고 있는 동안 A_TOG를 누르면 토글 OFF가 아니라 "항상 ON"으로 수렴시킨다.
+                // 또한 이 경우 다음 물리 A up은 무시하여(=가상 홀드 유지) 직관적인 동작을 만든다.
+                if (a_phys_down) {
+                    if (!a_latched) {
+                        register_code(KC_A);
+                        a_latched = true;
+                    }
+                    a_keep_latch_on_up = true;
+                    return false;
+                }
+
                 if (!a_latched) {
                     register_code(KC_A);
                     a_latched = true;
@@ -114,6 +126,9 @@ bool via_mw_process_record_user(uint16_t keycode, keyrecord_t *record) {
                 if (a_keep_latch_on_up) {
                     // (물리 A를 누른 상태에서 토글 ON 된 케이스) 물리 A up을 무시해서 홀드 유지
                     a_keep_latch_on_up = false;
+                    // 이 케이스가 "가상 홀드 중 물리 A down을 억제했던 상황"에서도 발생할 수 있으므로,
+                    // 억제 플래그를 누수시키지 않도록 정리한다(누수되면 다음 A up이 잘못 억제되어 stuck이 날 수 있음).
+                    a_phys_suppressed_dn = false;
                     return false;
                 }
                 if (a_phys_suppressed_dn) {
