@@ -1,15 +1,33 @@
 #include QMK_KEYBOARD_H
+#include "timer.h"
 
 // VIA에서 "Any"로 넣을 수 있는 커스텀 키코드:
 // - A 토글(가상 홀드): 0x7E40 (QK_USER_0)
+// - 오토클릭(홀드 중 50ms 간격 좌클릭): 0x7E41 (QK_USER_1)
 enum custom_keycodes {
     A_TOG = QK_USER_0,
+    AUTOCLICK = QK_USER_1,
 };
 
 static bool a_latched            = false; // 가상으로 A가 눌린 상태인지
 static bool a_phys_suppressed_dn = false; // 물리 A down 이벤트를 우리가 막았는지(대응 release도 막기 위함)
 static bool a_phys_down          = false; // 물리 A가 현재 눌린 상태인지
 static bool a_keep_latch_on_up   = false; // 물리 A를 누른 상태에서 토글 ON 되었을 때, 해당 물리 up을 무시(홀드 유지)
+
+// 오토클릭 상태(블로킹 없이 matrix_scan_user에서 타이머로 처리)
+static bool     autoclick_held       = false;
+static bool     autoclick_btn_down   = false;
+static uint16_t autoclick_last_press = 0;
+static uint16_t autoclick_down_since = 0;
+
+#ifndef AUTOCLICK_INTERVAL_MS
+#    define AUTOCLICK_INTERVAL_MS 50
+#endif
+
+// “클릭”을 만들기 위한 버튼 다운 유지 시간(너무 짧으면 OS/USB 폴링에 따라 누락될 수 있음)
+#ifndef AUTOCLICK_PULSE_MS
+#    define AUTOCLICK_PULSE_MS 5
+#endif
 
 static void a_tog_reset_state(void) {
     if (a_latched) {
@@ -19,6 +37,16 @@ static void a_tog_reset_state(void) {
     a_phys_suppressed_dn = false;
     a_phys_down          = false;
     a_keep_latch_on_up   = false;
+}
+
+static void autoclick_reset_state(void) {
+    autoclick_held = false;
+    if (autoclick_btn_down) {
+        unregister_code16(MS_BTN1);
+    }
+    autoclick_btn_down   = false;
+    autoclick_last_press = 0;
+    autoclick_down_since = 0;
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
@@ -62,6 +90,17 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             }
             return false;
 
+        case AUTOCLICK:
+            if (record->event.pressed) {
+                autoclick_held = true;
+                // 즉시 1번 클릭이 필요하면 아래 2줄 주석 해제
+                // autoclick_last_press = timer_read() - AUTOCLICK_INTERVAL_MS;
+                // (첫 press는 matrix_scan_user에서 처리)
+            } else {
+                autoclick_reset_state();
+            }
+            return false;
+
         // 물리 A키의 동작을 가로채서, "토글로 A가 눌린 상태일 때"의 예외 규칙을 구현
         case KC_A:
             if (record->event.pressed) {
@@ -93,9 +132,31 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 
+void matrix_scan_user(void) {
+    if (!autoclick_held) {
+        return;
+    }
+
+    // 50ms 간격으로 “press → 짧게 유지 → release” 펄스를 생성
+    if (!autoclick_btn_down) {
+        if (timer_elapsed(autoclick_last_press) >= AUTOCLICK_INTERVAL_MS) {
+            register_code16(MS_BTN1);
+            autoclick_btn_down   = true;
+            autoclick_down_since = timer_read();
+            autoclick_last_press = autoclick_down_since;
+        }
+    } else {
+        if (timer_elapsed(autoclick_down_since) >= AUTOCLICK_PULSE_MS) {
+            unregister_code16(MS_BTN1);
+            autoclick_btn_down = false;
+        }
+    }
+}
+
 // 가드: 슬립/부트로더/USB 상태 변화로 clear_keyboard()가 발생해도
 // 내부 상태(a_latched 등)가 남아있으면 이후 동작이 꼬일 수 있으므로 리셋한다.
 bool shutdown_user(bool jump_to_bootloader) {
+    autoclick_reset_state();
     a_tog_reset_state();
     return true;
 }

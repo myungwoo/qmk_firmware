@@ -52,6 +52,20 @@ dfu-programmer atmega32u4 reset
 - A 홀드가 켜진 상태에서 **물리 A를 누르면 변화 없음**
 - 그 상태에서 **물리 A를 떼는 순간**: **A 홀드 해제(= A 뗀 것과 같게)**, 이후 `A_TOG`로 다시 홀드 가능
 
+### 2) AUTOCLICK(홀드 오토클릭) 키 배치
+이 키맵에는 커스텀 키코드 **`AUTOCLICK`**도 있습니다.
+
+- VIA에서 원하는 키 선택 → **Any** → 아래 값을 입력
+  - **`0x7E41`** (QK_USER_1)
+
+동작:
+- `AUTOCLICK`을 **누르고 있는 동안** 마우스 **좌클릭을 50ms 간격**으로 반복합니다.
+- 구현이 `wait_ms()` 블로킹이 아니라 **타이머 기반**이라, 오토클릭을 누른 상태에서도 **ESC 등 다른 키 입력이 정상 동작**합니다.
+
+튜닝(펌웨어 코드 수정 시):
+- `AUTOCLICK_INTERVAL_MS` (기본 50ms)
+- `AUTOCLICK_PULSE_MS` (기본 5ms)
+
 ### 2) (편의) 기본 레이어에 넣어둔 위치
 이 키맵에서는 기본적으로 **레이어 1에서 Pause 자리에 `A_TOG`**를 넣었습니다.
 `MO(1)`(Fn)로 레이어 1에 들어간 뒤 Pause 위치를 누르면 토글됩니다.
@@ -62,7 +76,8 @@ dfu-programmer atmega32u4 reset
 - `rules.mk`
   - `VIA_ENABLE = yes`
   - `LTO_ENABLE = yes`
+  - `MOUSEKEY_ENABLE = yes` (오토클릭/마우스 버튼 키코드용)
 - `keymap.c`
-  - `A_TOG (0x7E40)` 및 동작 로직
+  - `A_TOG (0x7E40)`, `AUTOCLICK (0x7E41)` 및 동작 로직
 
 
